@@ -282,36 +282,33 @@ explain(
   ).data
 )
 
-// fromTreeExt
-
-func fromTreeExt<Repr: ExpSym>(parse: (Tree) -> Repr?) -> (Tree) -> Repr? {
-  return { t in
-    switch t {
-    case let .node("Lit", .cons(.leaf(str), .empty)):
-      return Int(str).map{ Repr.lit($0) }
-    case let .node("Neg", .cons(e, .empty)):
-      let repOpt: Repr? = from(tree: e)
-      return repOpt.map{ $0.neg }
-    case let .node("Add", .cons(e1, .cons(e2, .empty))):
-      let rep1Opt: Repr? = from(tree: e1)
-      let rep2Opt: Repr? = from(tree: e2)
-      return rep1Opt.flatMap{ rep1 in
-        rep2Opt.map{ rep1.add($0) }
-      }
-    default:
-      return nil
-    }
-  }
-}
-
 // from http://antitypical.com/swift/2015/07/01/pattern-matching-over-recursive-values-in-swift/
-public func fix<A, B>(_ f: @escaping ((A) -> B) -> (A) -> B) -> (A) -> B {
+public func fix<A, B>(_ f: @escaping((@escaping (A) -> B) -> (A) -> B)) -> (A) -> B {
   return { f(fix(f))($0) }
 }
 
 func fromTree_<Repr: ExpSym>(_ t: Tree) -> Repr? {
-  return fix(fromTreeExt)(t)
+  return fix({ p in
+    return { t in
+      switch t {
+      case let .node("Lit", .cons(.leaf(str), .empty)):
+        return Int(str).map{ Repr.lit($0) }
+      case let .node("Neg", .cons(e, .empty)):
+        let repOpt: Repr? = p(e)
+        return repOpt.map{ $0.neg }
+      case let .node("Add", .cons(e1, .cons(e2, .empty))):
+        let rep1Opt: Repr? = p(e1)
+        let rep2Opt: Repr? = p(e2)
+        return rep1Opt.flatMap{ rep1 in
+          rep2Opt.map{ rep1.add($0) }
+        }
+      default:
+        return nil
+      }
+    }
+  })(t)
 }
+
 
 explain(
   topic: "fromTree_ still works like fromTree",
